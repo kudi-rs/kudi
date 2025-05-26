@@ -1,0 +1,18 @@
+[workspace]
+members = [".", "kudi-macros"]
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
+
+[package]
+name = "kudi"
+version = "0.1.0"
+edition = { workspace = true }
+
+[dependencies]
+kudi-macros = { version = "0.1.0", path = "kudi-macros" }
