@@ -2,6 +2,12 @@
 name = "kudi-macros"
 version = "0.1.0"
 edition = { workspace = true }
+description = "Macros for kudi"
+repository = "https://github.com/kudi-rs/kudi"
+documentation = "https://docs.rs/kudi-macros"
+license = "MIT"
+categories = ["rust-patterns"]
+keywords = ["ioc", "dependency-injection", "di"]
 
 [lib]
 proc-macro = true
