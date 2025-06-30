@@ -1,7 +1,8 @@
+use itertools::Itertools;
 use syn::{
     Expr, Ident, ImplItem, ImplItemConst, ImplItemFn, ImplItemType, Path, ReturnType, TraitBound,
-    Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen, TypePtr,
-    TypeReference, TypeTuple,
+    Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen, TypePath,
+    TypePtr, TypeReference, TypeSlice, TypeTraitObject, TypeTuple,
 };
 
 use super::ast::ItemImplTrait;
@@ -52,20 +53,18 @@ impl Isomorphic for ImplItemConst {
         let v = Isomorphic::is_isomorphic(&ctn.ident, &target.ident, ctx)
             && Isomorphic::is_isomorphic(&ctn.ty, &target.ty, ctx);
 
-        let v_expr = if let Expr::Path(expr) = &ctn.expr {
-            if let Some(qself) = expr.qself.as_ref().filter(|qs| qs.as_token.is_some()) {
-                let v_target = Isomorphic::is_isomorphic(qself.ty.as_ref(), ctx.target, ctx);
-                let v_trait = expr.path.segments[qself.position - 1].ident
-                    == ctx.trait_.segments.last().unwrap().ident;
-                let v_ident = Isomorphic::is_isomorphic(
-                    &expr.path.segments[qself.position].ident,
-                    &target.ident,
-                    ctx,
-                );
-                v_target && v_trait && v_ident
-            } else {
-                false
-            }
+        let v_expr = if let Expr::Path(expr) = &ctn.expr
+            && let Some(qself) = expr.qself.as_ref().filter(|qs| qs.as_token.is_some())
+        {
+            let v_target = Isomorphic::is_isomorphic(qself.ty.as_ref(), ctx.target, ctx);
+            let v_trait = expr.path.segments[qself.position - 1].ident
+                == ctx.trait_.segments.last().unwrap().ident;
+            let v_ident = Isomorphic::is_isomorphic(
+                &expr.path.segments[qself.position].ident,
+                &target.ident,
+                ctx,
+            );
+            v_target && v_trait && v_ident
         } else {
             false
         };
@@ -85,20 +84,18 @@ impl Isomorphic for ImplItemType {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
         let v = Isomorphic::is_isomorphic(&ctn.ident, &target.ident, ctx);
 
-        let v_ty = if let Type::Path(ty) = &ctn.ty {
-            if let Some(qself) = ty.qself.as_ref().filter(|qs| qs.as_token.is_some()) {
-                let v_target = Isomorphic::is_isomorphic(qself.ty.as_ref(), ctx.target, ctx);
-                let v_trait = ty.path.segments[qself.position - 1].ident
-                    == ctx.trait_.segments.last().unwrap().ident;
-                let v_ident = Isomorphic::is_isomorphic(
-                    &ty.path.segments[qself.position].ident,
-                    &target.ident,
-                    ctx,
-                );
-                v_target && v_trait && v_ident
-            } else {
-                false
-            }
+        let v_ty = if let Type::Path(ty) = &ctn.ty
+            && let Some(qself) = ty.qself.as_ref().filter(|qs| qs.as_token.is_some())
+        {
+            let v_target = Isomorphic::is_isomorphic(qself.ty.as_ref(), ctx.target, ctx);
+            let v_trait = ty.path.segments[qself.position - 1].ident
+                == ctx.trait_.segments.last().unwrap().ident;
+            let v_ident = Isomorphic::is_isomorphic(
+                &ty.path.segments[qself.position].ident,
+                &target.ident,
+                ctx,
+            );
+            v_target && v_trait && v_ident
         } else {
             false
         };
@@ -252,5 +249,65 @@ impl Isomorphic for TypeImplTrait {
         }
 
         true
+    }
+}
+
+impl Isomorphic for TypeSlice {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        Isomorphic::is_isomorphic(ctn.elem.as_ref(), target.elem.as_ref(), ctx)
+    }
+}
+
+impl Isomorphic for TypePath {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        Isomorphic::is_isomorphic(&ctn.path, &target.path, ctx)
+    }
+}
+
+impl Isomorphic for TypeTraitObject {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        let ctn_bounds = ctn
+            .bounds
+            .iter()
+            .filter_map(|b| {
+                if let TypeParamBound::Trait(tb) = b {
+                    Some(tb)
+                } else {
+                    None
+                }
+            })
+            .sorted_by_key(|tb| &tb.path.segments.last().unwrap().ident);
+        let target_bounds = target
+            .bounds
+            .iter()
+            .filter_map(|b| {
+                if let TypeParamBound::Trait(tb) = b {
+                    Some(tb)
+                } else {
+                    None
+                }
+            })
+            .sorted_by_key(|tb| &tb.path.segments.last().unwrap().ident);
+
+        if ctn_bounds.as_slice().len() != target_bounds.as_slice().len() {
+            return false;
+        }
+
+        for (ctn_tb, target_tb) in ctn_bounds.zip(target_bounds) {
+            if !Isomorphic::is_isomorphic(&ctn_tb.path, &target_tb.path, ctx) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+// WARN: we don't support checking path arguments at present
+impl Isomorphic for Path {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        let ctn_last = ctn.segments.last().unwrap();
+        let target = target.segments.last().unwrap();
+        ctn_last.ident == target.ident
     }
 }

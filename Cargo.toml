@@ -9,6 +9,7 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 clap = "4.5"
+itertools = "0.14"
 
 [package]
 name = "kudi"
