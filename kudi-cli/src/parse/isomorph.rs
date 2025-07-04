@@ -1,8 +1,8 @@
 use itertools::Itertools;
 use syn::{
-    Expr, Ident, ImplItem, ImplItemConst, ImplItemFn, ImplItemType, Path, ReturnType, TraitBound,
-    Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen, TypePath,
-    TypePtr, TypeReference, TypeSlice, TypeTraitObject, TypeTuple,
+    Expr, FnArg, Ident, ImplItem, ImplItemConst, ImplItemFn, ImplItemType, Path, ReturnType,
+    Signature, TraitBound, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound,
+    TypeParen, TypePath, TypePtr, TypeReference, TypeSlice, TypeTraitObject, TypeTuple,
 };
 
 use super::ast::ItemImplTrait;
@@ -75,7 +75,33 @@ impl Isomorphic for ImplItemConst {
 
 impl Isomorphic for ImplItemFn {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
-        todo!()
+        Isomorphic::is_isomorphic(&ctn.sig, &target.sig, ctx)
+    }
+}
+
+impl Isomorphic for Signature {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        if ctn.ident != target.ident {
+            return false;
+        }
+
+        if ctn.inputs.len() != target.inputs.len() {
+            return false;
+        }
+
+        for (ctn, target) in ctn.inputs.iter().zip(&target.inputs) {
+            match (ctn, target) {
+                (FnArg::Receiver(ctn), FnArg::Receiver(target)) => {
+                    if ctn != target {
+                        return false;
+                    }
+                }
+                (FnArg::Typed(ctn), FnArg::Typed(target)) => todo!(),
+                _ => return false,
+            }
+        }
+
+        true
     }
 }
 
