@@ -1,8 +1,9 @@
 use itertools::Itertools;
 use syn::{
-    Expr, FnArg, Ident, ImplItem, ImplItemConst, ImplItemFn, ImplItemType, Path, ReturnType,
-    Signature, TraitBound, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound,
-    TypeParen, TypePath, TypePtr, TypeReference, TypeSlice, TypeTraitObject, TypeTuple,
+    Expr, FnArg, Ident, ImplItem, ImplItemConst, ImplItemFn, ImplItemType, PatType, Path,
+    ReturnType, Signature, TraitBound, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait,
+    TypeParamBound, TypeParen, TypePath, TypePtr, TypeReference, TypeSlice, TypeTraitObject,
+    TypeTuple,
 };
 
 use super::ast::ItemImplTrait;
@@ -96,12 +97,22 @@ impl Isomorphic for Signature {
                         return false;
                     }
                 }
-                (FnArg::Typed(ctn), FnArg::Typed(target)) => todo!(),
+                (FnArg::Typed(ctn), FnArg::Typed(target)) => {
+                    if !Isomorphic::is_isomorphic(ctn, target, ctx) {
+                        return false;
+                    }
+                }
                 _ => return false,
             }
         }
 
         true
+    }
+}
+
+impl Isomorphic for PatType {
+    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+        Isomorphic::is_isomorphic(ctn.ty.as_ref(), target.ty.as_ref(), ctx)
     }
 }
 
@@ -131,7 +142,7 @@ impl Isomorphic for ImplItemType {
 }
 
 impl Isomorphic for Ident {
-    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+    fn is_isomorphic(ctn: &Self, target: &Self, _: &CompareCtx) -> bool {
         ctn == target
     }
 }
@@ -167,8 +178,15 @@ impl Isomorphic for Type {
 
 impl Isomorphic for TypeArray {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
-        Type::is_isomorphic(&ctn.elem, &target.elem, ctx)
-            && Expr::is_isomorphic(&ctn.len, &target.len, ctx)
+        if !Type::is_isomorphic(&ctn.elem, &target.elem, ctx) {
+            return false;
+        }
+
+        match (&ctn.len, &target.len) {
+            (Expr::Lit(ctn), Expr::Lit(target)) => ctn == target,
+            (Expr::Path(_), Expr::Path(_)) => true,
+            _ => false,
+        }
     }
 }
 
@@ -202,13 +220,13 @@ impl Isomorphic for ReturnType {
 
 impl Isomorphic for TypeGroup {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
-        Isomorphic::is_isomorphic(ctn.elem.as_ref(), &target.elem.as_ref(), ctx)
+        Isomorphic::is_isomorphic(ctn.elem.as_ref(), target.elem.as_ref(), ctx)
     }
 }
 
 impl Isomorphic for TypeParen {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
-        Isomorphic::is_isomorphic(ctn.elem.as_ref(), &target.elem.as_ref(), ctx)
+        Isomorphic::is_isomorphic(ctn.elem.as_ref(), target.elem.as_ref(), ctx)
     }
 }
 
@@ -216,14 +234,14 @@ impl Isomorphic for TypeParen {
 impl Isomorphic for TypeReference {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
         ctn.mutability == target.mutability
-            && Isomorphic::is_isomorphic(ctn.elem.as_ref(), &target.elem.as_ref(), ctx)
+            && Isomorphic::is_isomorphic(ctn.elem.as_ref(), target.elem.as_ref(), ctx)
     }
 }
 
 impl Isomorphic for TypePtr {
     fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
         if (ctn.const_token == target.const_token) || (ctn.mutability == target.mutability) {
-            Isomorphic::is_isomorphic(ctn.elem.as_ref(), &target.elem.as_ref(), ctx)
+            Isomorphic::is_isomorphic(ctn.elem.as_ref(), target.elem.as_ref(), ctx)
         } else {
             false
         }
@@ -331,7 +349,7 @@ impl Isomorphic for TypeTraitObject {
 
 // WARN: we don't support checking path arguments at present
 impl Isomorphic for Path {
-    fn is_isomorphic(ctn: &Self, target: &Self, ctx: &CompareCtx) -> bool {
+    fn is_isomorphic(ctn: &Self, target: &Self, _: &CompareCtx) -> bool {
         let ctn_last = ctn.segments.last().unwrap();
         let target = target.segments.last().unwrap();
         ctn_last.ident == target.ident
